@@ -52,6 +52,37 @@ namespace pvd
 
 	bool MpegTsStream::Start()
 	{
+		// Prefix every depacketizer log line with this stream's name path.
+		{
+			ov::LockGuard<ov::SharedMutex> lock(_depacketizer_lock);
+			_depacketizer.SetNamePath(GetNamePath().CStr());
+		}
+
+		// UDP datagram reordering is opt-in per application and only applies to datagram-framed(UDP) input;
+		// SRT/TCP are byte streams that the transport already delivers in order.
+		//
+		// Thread-safety note: the depacketizer (including the reorder buffer) has no internal lock;
+		// its state is protected by _depacketizer_lock, held here and in OnDataReceived
+		// (the member is `OV_GUARDED_BY(_depacketizer_lock)`).
+		// Enabling here also runs before the channel is registered, so it happens-before any data reaches the depacketizer.
+		if ((_remote != nullptr) && (_remote->GetType() == ov::SocketType::Udp))
+		{
+			const auto &app_info = ocst::Orchestrator::GetInstance()->GetApplicationInfo(_vhost_app_name);
+
+			if (app_info.IsValid() == false)
+			{
+				logtd("[%s/%s] Could not resolve application config at stream start; MPEG-TS packet reordering left disabled",
+					  _vhost_app_name.CStr(), GetName().CStr());
+			}
+			else if (app_info.GetConfig().GetProviders().GetMpegtsProvider().GetPacketReordering())
+			{
+				ov::LockGuard<ov::SharedMutex> lock(_depacketizer_lock);
+				_depacketizer.EnablePacketReordering();
+
+				logti("[%s/%s] MPEG-TS UDP packet reordering is enabled", _vhost_app_name.CStr(), GetName().CStr());
+			}
+		}
+
 		SetState(Stream::State::PLAYING);
 		return PushStream::Start();
 	}
@@ -61,6 +92,17 @@ namespace pvd
 		if (GetState() == Stream::State::STOPPED)
 		{
 			return true;
+		}
+
+		// Drain any datagrams the reorder buffer is still holding behind a gap and forward the
+		// resulting frames before teardown, so already-received data is delivered rather than
+		// dropped. This runs while the stream is still playing (before `PushStream::Stop()`)
+		// and is a no-op unless reordering is enabled and something is buffered.
+		// `Stop()` is never entered with `_depacketizer_lock` held, so acquiring it here is safe.
+		{
+			ov::ScopedLock lock(_depacketizer_lock);
+			_depacketizer.FlushReorderBuffer();
+			ForwardDepacketizedFrames();
 		}
 
 		if (_remote->GetState() == ov::SocketState::Connected)
@@ -93,18 +135,38 @@ namespace pvd
 			return false;
 		}
 
-		ov::LockGuard<ov::SharedMutex> lock(_depacketizer_lock);
-		_depacketizer.AddPacket(data);
-
-		// Publish
-		if (IsPublished() == false && _depacketizer.IsTrackInfoAvailable())
+		bool publish_failed = false;
 		{
-			if (Publish() == false)
+			ov::ScopedLock lock(_depacketizer_lock);
+			_depacketizer.AddPacket(data);
+
+			// Publish once the track information becomes available.
+			if (IsPublished() == false && _depacketizer.IsTrackInfoAvailable())
+			{
+				publish_failed = (Publish() == false);
+			}
+
+			// Forward whatever is ready. A fatal per-frame error bails out without stopping;
+			// a publish failure stops the stream below, outside the lock.
+			if ((publish_failed == false) && (ForwardDepacketizedFrames() == false))
 			{
 				return false;
 			}
 		}
 
+		if (publish_failed == true)
+		{
+			// PublishChannel failed. Stop outside the depacketizer lock so the reorder-drain in
+			// `Stop()` can acquire it without re-entering (the lock is not held here).
+			Stop();
+			return false;
+		}
+
+		return true;
+	}
+
+	bool MpegTsStream::ForwardDepacketizedFrames()
+	{
 		if (IsPublished() == true)
 		{
 			while (_depacketizer.IsESAvailable())
@@ -316,7 +378,7 @@ namespace pvd
 		// Publish
 		if (PublishChannel(_vhost_app_name) == false)
 		{
-			Stop();
+			// The caller stops the stream (outside the depacketizer lock).
 			return false;
 		}
 
