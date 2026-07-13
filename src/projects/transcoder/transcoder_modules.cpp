@@ -22,7 +22,7 @@ namespace tc
 		// Video Codecs
 		// --------------------------------------------------------------------------
 		Register(info::CodecModule("FFmpeg Video Codecs", cmn::MediaType::Video, cmn::MediaCodecModuleId::DEFAULT, 0, "-",
-						   {cmn::MediaCodecId::H264, cmn::MediaCodecId::H265, cmn::MediaCodecId::Vp8},
+						   {cmn::MediaCodecId::H264, cmn::MediaCodecId::H265, cmn::MediaCodecId::Vp8, cmn::MediaCodecId::Av1},
 						   true, true, false, false));
 
 		Register(info::CodecModule("Open Source H.264 Codec", cmn::MediaType::Video, cmn::MediaCodecModuleId::OPENH264, 0, "-",
@@ -38,6 +38,10 @@ namespace tc
 		Register(info::CodecModule("WebM VP8/VP9 Codec SDK", cmn::MediaType::Video, cmn::MediaCodecModuleId::LIBVPX, 0, "-",
 						   {cmn::MediaCodecId::Vp8},
 						   true, false, true, false));
+
+		Register(info::CodecModule("AOMedia AV1 Codec SDK", cmn::MediaType::Video, cmn::MediaCodecModuleId::LIBAOM, 0, "-",
+						   {cmn::MediaCodecId::Av1},
+						   true, true, true, false));
 
 		// --------------------------------------------------------------------------
 		// Audio Codecs
