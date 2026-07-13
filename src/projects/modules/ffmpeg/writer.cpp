@@ -572,6 +572,10 @@ namespace ffmpeg
 					av_packet.data = (uint8_t *)new_data->GetDataAs<uint8_t>();
 				}
 				break;
+				case cmn::BitstreamFormat::AV1_OBU:
+					// The MP4 muxer strips OBU_TEMPORAL_DELIMITER (and other muxer-unfriendly OBUs)
+					// itself via ff_av1_filter_obus(), so the packet is passed through unchanged.
+					break;
 				case cmn::BitstreamFormat::AAC_RAW:
 				case cmn::BitstreamFormat::OPUS:
 					break;
