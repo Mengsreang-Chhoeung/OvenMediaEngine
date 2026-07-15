@@ -5,6 +5,7 @@
 #pragma once
 
 #include <base/ovlibrary/converter.h>
+#include <functional>
 
 #include "base/common_types.h"
 #include "base/info/info.h"
@@ -48,6 +49,8 @@ namespace mon
 		void SetOriginConnectionTimeMSec(int64_t value);
 		void SetOriginSubscribeTimeMSec(int64_t value);
 
+		uint32_t GetUniqueViewerCount() const;
+
 		// Overriding from CommonMetrics
 		void IncreaseBytesIn(uint64_t value) override;
 		void IncreaseBytesOut(PublisherType type, uint64_t value) override;
@@ -62,7 +65,14 @@ namespace mon
 		void OnSessionDisconnected(PublisherType type) override;
 		void OnSessionsDisconnected(PublisherType type, uint64_t number_of_sessions) override;
 
+		void SetUniqueViewerCountCallback(std::function<uint32_t()> callback)
+		{
+			_unique_viewer_count_callback = callback;
+		}
+
 	private:
+		std::function<uint32_t()> _unique_viewer_count_callback;
+
 		// Related to origin, From Provider
 		std::atomic<int64_t> _connection_time_to_origin_msec  = 0;
 		std::atomic<int64_t> _subscribe_time_from_origin_msec = 0;

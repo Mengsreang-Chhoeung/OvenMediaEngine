@@ -9,6 +9,8 @@
 #include "base/common_types.h"
 #include "base/info/session.h"
 
+#include <vector>
+
 namespace pub
 {
 	class Application;
@@ -37,6 +39,8 @@ namespace pub
 
 		virtual void SendOutgoingData(const std::any &packet) {};
 		virtual void OnMessageReceived(const std::any &message) {};
+
+		virtual std::vector<uint32_t> GetActiveConnectionIds() const { return {}; }
 
 		enum class SessionState : int8_t
 		{

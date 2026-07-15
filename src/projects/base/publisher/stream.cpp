@@ -1,7 +1,25 @@
 #include "stream.h"
+
+#include <base/event/command/commands.h>
+#include <monitoring/monitoring.h>
+
+#include <fstream>
+#include <mutex>
+#include <set>
+
 #include "application.h"
 #include "publisher_private.h"
-#include <base/event/command/commands.h>
+
+static std::mutex debug_log_mutex;
+static void write_debug_log(const std::string &message)
+{
+	std::lock_guard<std::mutex> lock(debug_log_mutex);
+	std::ofstream ofs("/workspace/debug_viewer.log", std::ios::app);
+	if (ofs)
+	{
+		ofs << message << "\n";
+	}
+}
 
 namespace pub
 {
@@ -9,7 +27,7 @@ namespace pub
 		: _packet_queue(nullptr, 500)
 	{
 		_stop_thread_flag = true;
-		_parent = parent_stream;
+		_parent			  = parent_stream;
 	}
 
 	StreamWorker::~StreamWorker()
@@ -24,14 +42,14 @@ namespace pub
 		}
 
 		auto urn = std::make_shared<info::ManagedQueue::URN>(
-			_parent->GetApplicationName(), 
-			_parent->GetName(), 
-			"pub", 
+			_parent->GetApplicationName(),
+			_parent->GetName(),
+			"pub",
 			ov::String::FormatString("streamworker_%s", _parent->GetApplication()->GetPublisherTypeName()).LowerCaseString());
 		_packet_queue.SetUrn(urn);
-		
-		_stop_thread_flag = false;
-		_worker_thread = std::thread(&StreamWorker::WorkerThread, this);
+
+		_stop_thread_flag	   = false;
+		_worker_thread		   = std::thread(&StreamWorker::WorkerThread, this);
 
 		ov::String thread_name = ov::String::FormatString("SW-%s", _parent->GetApplication()->GetPublisherTypeName());
 		pthread_setname_np(_worker_thread.native_handle(), thread_name.CStr());
@@ -54,8 +72,8 @@ namespace pub
 		_packet_queue.Stop();
 		_session_message_queue.Stop();
 		_queue_event.Stop();
-		
-		if(_worker_thread.joinable())
+
+		if (_worker_thread.joinable())
 		{
 			_worker_thread.join();
 		}
@@ -158,7 +176,7 @@ namespace pub
 		}
 
 		auto data = _session_message_queue.Dequeue();
-		if(data.has_value())
+		if (data.has_value())
 		{
 			return data.value();
 		}
@@ -184,7 +202,7 @@ namespace pub
 
 			auto packet = PopStreamPacket();
 			if (packet.has_value())
-			{		
+			{
 				session_lock.lock();
 				for (auto const &x : _sessions)
 				{
@@ -199,9 +217,9 @@ namespace pub
 	Stream::Stream(const std::shared_ptr<Application> application, const info::Stream &info)
 		: info::Stream(info)
 	{
-		_application = application;
+		_application			= application;
 		_last_issued_session_id = 100;
-		_state = State::CREATED;
+		_state					= State::CREATED;
 	}
 
 	Stream::~Stream()
@@ -232,7 +250,31 @@ namespace pub
 		bool ok = Start();
 
 		Unlock();
-		
+
+		if (ok)
+		{
+			auto metrics = StreamMetrics(*this);
+			if (metrics != nullptr)
+			{
+				write_debug_log("Successfully set callback for stream: " + std::string(GetName().CStr()) + ", Stream ID: " + std::to_string(GetId()));
+				metrics->SetUniqueViewerCountCallback([self = std::weak_ptr<const Stream>(GetSharedPtr())]() -> uint32_t {
+					auto stream = self.lock();
+					if (stream)
+					{
+						uint32_t count = stream->GetUniqueViewerCount();
+						write_debug_log("Callback executed for stream: " + std::string(stream->GetName().CStr()) + ", returning unique viewer count: " + std::to_string(count));
+						return count;
+					}
+					write_debug_log("Callback executed but stream was deleted!");
+					return 0;
+				});
+			}
+			else
+			{
+				write_debug_log("Failed to find StreamMetrics for stream: " + std::string(GetName().CStr()) + ", Stream ID: " + std::to_string(GetId()));
+			}
+		}
+
 		return ok;
 	}
 
@@ -268,7 +310,7 @@ namespace pub
 		logti("%s has started [%s(%u)] stream (MSID : %d)", GetApplicationTypeName(), GetName().CStr(), GetId(), GetMsid());
 
 		_started_time = std::chrono::system_clock::now();
-		_state = State::STARTED;
+		_state		  = State::STARTED;
 		return true;
 	}
 
@@ -285,7 +327,7 @@ namespace pub
 
 		_state = State::STOPPED;
 
-		for(const auto &worker : _stream_workers)
+		for (const auto &worker : _stream_workers)
 		{
 			worker->Stop();
 		}
@@ -300,7 +342,7 @@ namespace pub
 
 		logti("[%s(%u)] %s - Try to stop all sessions (%zu)", GetName().CStr(), GetId(), GetApplicationTypeName(), _sessions.size());
 
-		for(const auto &x : _sessions)
+		for (const auto &x : _sessions)
 		{
 			auto session = x.second;
 			session->Stop();
@@ -314,21 +356,21 @@ namespace pub
 
 	bool Stream::Update(const std::shared_ptr<info::Stream> &info)
 	{
-		logti("[%s(%u)] %s stream has been updated (MSID : %d)", 
-							info->GetName().CStr(), info->GetId(), GetApplicationTypeName(), info->GetMsid());
+		logti("[%s(%u)] %s stream has been updated (MSID : %d)",
+			  info->GetName().CStr(), info->GetId(), GetApplicationTypeName(), info->GetMsid());
 
 		return true;
 	}
 
 	bool Stream::WaitUntilStart(uint32_t timeout_ms)
 	{
-		ov::StopWatch	watch;
-		
+		ov::StopWatch watch;
+
 		watch.Start();
 
-		while(_state != State::STARTED && watch.Elapsed() < timeout_ms)
+		while (_state != State::STARTED && watch.Elapsed() < timeout_ms)
 		{
-			usleep(100 * 1000); // 100ms
+			usleep(100 * 1000);	 // 100ms
 		}
 
 		return _state == State::STARTED;
@@ -337,7 +379,7 @@ namespace pub
 	bool Stream::CreateStreamWorker(uint32_t worker_count)
 	{
 		std::unique_lock<std::shared_mutex> worker_lock(_stream_worker_lock);
-		
+
 		if (worker_count > MAX_STREAM_WORKER_THREAD_COUNT)
 		{
 			worker_count = MAX_STREAM_WORKER_THREAD_COUNT;
@@ -348,7 +390,7 @@ namespace pub
 		for (uint32_t i = 0; i < _worker_count; i++)
 		{
 			auto stream_worker = std::make_shared<StreamWorker>(GetSharedPtr());
-						
+
 			if (stream_worker->Start() == false)
 			{
 				logte("Cannot create stream thread (%d)", i);
@@ -381,9 +423,9 @@ namespace pub
 		return _application;
 	}
 
-	const char * Stream::GetApplicationTypeName() const
+	const char *Stream::GetApplicationTypeName() const
 	{
-		if(GetApplication() == nullptr)
+		if (GetApplication() == nullptr)
 		{
 			return "Unknown";
 		}
@@ -393,14 +435,14 @@ namespace pub
 
 	std::shared_ptr<StreamWorker> Stream::GetWorkerBySessionID(session_id_t session_id)
 	{
-		if(_worker_count == 0)
+		if (_worker_count == 0)
 		{
 			return nullptr;
 		}
 		std::shared_lock<std::shared_mutex> worker_lock(_stream_worker_lock);
 
 		size_t worker_id = session_id % _worker_count;
-		if(worker_id >= _stream_workers.size())
+		if (worker_id >= _stream_workers.size())
 		{
 			logtw("Invalid worker id : %zu", worker_id);
 			return nullptr;
@@ -421,10 +463,10 @@ namespace pub
 		// For getting session, all sessions
 		_sessions[session->GetId()] = session;
 
-		if(_worker_count > 0)
+		if (_worker_count > 0)
 		{
 			auto worker = GetWorkerBySessionID(session->GetId());
-			if(worker == nullptr)
+			if (worker == nullptr)
 			{
 				logte("Cannot find worker for session : %u", session->GetId());
 				return false;
@@ -449,7 +491,7 @@ namespace pub
 			_sessions.erase(session_iterator);
 		}
 
-		if(_worker_count > 0)
+		if (_worker_count > 0)
 		{
 			auto worker = GetWorkerBySessionID(id);
 			if (worker == nullptr)
@@ -487,9 +529,29 @@ namespace pub
 		return _sessions.size();
 	}
 
+	uint32_t Stream::GetUniqueViewerCount() const
+	{
+		std::set<uint32_t> unique_connections;
+		std::shared_lock<std::shared_mutex> session_lock(_session_map_mutex);
+		for (const auto &pair : _sessions)
+		{
+			auto session = pair.second;
+			if (session != nullptr)
+			{
+				auto connection_ids = session->GetActiveConnectionIds();
+				for (uint32_t cid : connection_ids)
+				{
+					unique_connections.insert(cid);
+				}
+			}
+		}
+		write_debug_log("Stream::GetUniqueViewerCount() for stream: " + std::string(GetName().CStr()) + ", sessions size: " + std::to_string(_sessions.size()) + ", unique connections size: " + std::to_string(unique_connections.size()));
+		return unique_connections.size();
+	}
+
 	bool Stream::BroadcastPacket(const std::any &packet)
 	{
-		if(_worker_count > 0)
+		if (_worker_count > 0)
 		{
 			std::shared_lock<std::shared_mutex> worker_lock(_stream_worker_lock);
 			for (uint32_t i = 0; i < _stream_workers.size(); i++)
@@ -506,16 +568,16 @@ namespace pub
 				session->SendOutgoingData(packet);
 			}
 		}
-	
+
 		return true;
 	}
 
 	bool Stream::SendMessage(const std::shared_ptr<Session> &session, const std::any &message)
 	{
-		if(_worker_count > 0)
+		if (_worker_count > 0)
 		{
 			auto worker = GetWorkerBySessionID(session->GetId());
-			if(worker == nullptr)
+			if (worker == nullptr)
 			{
 				logtw("Cannot find worker for session : %u", session->GetId());
 				return false;
@@ -539,8 +601,7 @@ namespace pub
 
 		switch (event->GetCommandType())
 		{
-			case EventCommand::Type::UpdateSubtitleLanguage:
-			{
+			case EventCommand::Type::UpdateSubtitleLanguage: {
 				auto command = event->GetCommand<EventCommandUpdateLanguage>();
 				if (command != nullptr)
 				{

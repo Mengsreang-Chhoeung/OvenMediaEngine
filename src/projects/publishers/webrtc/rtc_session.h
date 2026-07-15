@@ -103,6 +103,8 @@ public:
 		return _ice_session_id;
 	}
 
+	std::vector<uint32_t> GetActiveConnectionIds() const override;
+
 private:
 	bool ProcessReceiverReport(const std::shared_ptr<RtcpInfo> &rtcp_info);
 	bool ProcessNACK(const std::shared_ptr<RtcpInfo> &rtcp_info);

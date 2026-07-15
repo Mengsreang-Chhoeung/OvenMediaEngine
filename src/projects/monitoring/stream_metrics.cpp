@@ -7,6 +7,19 @@
 #include "application_metrics.h"
 #include "host_metrics.h"
 #include "monitoring_private.h"
+#include <fstream>
+#include <mutex>
+
+static std::mutex debug_log_mutex;
+static void write_debug_log(const std::string &message)
+{
+	std::lock_guard<std::mutex> lock(debug_log_mutex);
+	std::ofstream ofs("/workspace/debug_viewer.log", std::ios::app);
+	if (ofs)
+	{
+		ofs << message << "\n";
+	}
+}
 
 namespace mon
 {
@@ -238,6 +251,31 @@ namespace mon
 				  GetApplicationInfo().GetVHostAppName().CStr(), GetName().CStr(),
 				  ::StringFromPublisherType(type).CStr(), ::StringFromPublisherType(type).CStr(), GetConnections(type), GetTotalConnections(), GetApplicationMetrics()->GetTotalConnections());
 		}
+	}
+
+	uint32_t StreamMetrics::GetUniqueViewerCount() const
+	{
+		if (_unique_viewer_count_callback)
+		{
+			uint32_t val = _unique_viewer_count_callback();
+			write_debug_log("StreamMetrics::GetUniqueViewerCount() for stream: " + std::string(GetName().CStr()) + ", callback present, returning: " + std::to_string(val));
+			return val;
+		}
+
+		uint32_t total = 0;
+		{
+			ov::SharedLockGuard lock(_output_stream_metrics_mutex);
+			write_debug_log("StreamMetrics::GetUniqueViewerCount() for stream: " + std::string(GetName().CStr()) + ", callback NOT present, output streams count: " + std::to_string(_output_stream_metrics.size()));
+			for (const auto &out_metric : _output_stream_metrics)
+			{
+				if (out_metric != nullptr)
+				{
+					total += out_metric->GetUniqueViewerCount();
+				}
+			}
+		}
+		write_debug_log("StreamMetrics::GetUniqueViewerCount() for stream: " + std::string(GetName().CStr()) + ", returning total output stream viewers: " + std::to_string(total));
+		return total;
 	}
 
 }  // namespace mon

@@ -96,6 +96,7 @@ void HlsSession::UpdateLastRequest(uint32_t connection_id)
 {
 	std::lock_guard<std::shared_mutex> lock(_last_request_time_guard);
 	_last_request_time[connection_id] = ov::Clock::NowMSec();
+	_session_last_request_time_ms = ov::Clock::NowMSec();
 
 	logtt("TsSession(%u) : Request updated from %u : size(%zu)", GetId(), connection_id, _last_request_time.size());
 }
@@ -125,6 +126,15 @@ bool HlsSession::IsNoConnection() const
 {
 	std::shared_lock<std::shared_mutex> lock(_last_request_time_guard);
 	return _last_request_time.empty();
+}
+
+std::vector<uint32_t> HlsSession::GetActiveConnectionIds() const
+{
+	if (ov::Clock::NowMSec() - _session_last_request_time_ms.load() < 10000)
+	{
+		return { GetId() };
+	}
+	return {};
 }
 
 // pub::Session Interface
