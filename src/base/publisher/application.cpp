@@ -206,6 +206,11 @@ namespace pub
 		return _publisher_type_name.CStr();
 	}
 
+	PublisherType Application::GetPublisherType() const
+	{
+		return _publisher->GetPublisherType();
+	}
+
 	bool Application::Start()
 	{
 		_application_worker_count = GetConfig().GetAppWorkerCount();

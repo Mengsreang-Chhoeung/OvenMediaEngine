@@ -873,3 +873,8 @@ bool RtcSession::OnDataReceivedFromNextNode(NodeType from_node, const std::share
 {
 	return true;
 }
+
+std::vector<ov::String> RtcSession::GetActiveConnectionIds() const
+{
+	return { GetClientIp() };
+}

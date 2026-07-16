@@ -9,6 +9,8 @@
 #include "base/common_types.h"
 #include "base/info/session.h"
 
+#include <vector>
+
 namespace pub
 {
 	class Application;
@@ -38,6 +40,11 @@ namespace pub
 		virtual void SendOutgoingData(const std::any &packet) {};
 		virtual void OnMessageReceived(const std::any &message) {};
 
+		virtual std::vector<ov::String> GetActiveConnectionIds() const { return {}; }
+
+		ov::String GetClientIp() const { return _client_ip; }
+		void SetClientIp(const ov::String &client_ip) { _client_ip = client_ip; }
+
 		enum class SessionState : int8_t
 		{
 			Ready,
@@ -60,6 +67,7 @@ namespace pub
 		std::shared_ptr<Stream> _stream;
 		SessionState _state;
 		ov::String _error_reason;
+		ov::String _client_ip;
 	};
 
 }  // namespace pub

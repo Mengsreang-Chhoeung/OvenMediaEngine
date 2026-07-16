@@ -7,6 +7,7 @@
 #include "application_metrics.h"
 #include "host_metrics.h"
 #include "monitoring_private.h"
+#include <set>
 
 namespace mon
 {
@@ -238,6 +239,46 @@ namespace mon
 				  GetApplicationInfo().GetVHostAppName().CStr(), GetName().CStr(),
 				  ::StringFromPublisherType(type).CStr(), ::StringFromPublisherType(type).CStr(), GetConnections(type), GetTotalConnections(), GetApplicationMetrics()->GetTotalConnections());
 		}
+	}
+
+	uint32_t StreamMetrics::GetUniqueViewerCount() const
+	{
+		std::set<ov::String> unique_viewers;
+		bool callback_executed = false;
+
+		{
+			std::lock_guard<std::mutex> lock(_unique_viewer_count_callbacks_mutex);
+			for (const auto &pair : _unique_viewer_count_callbacks)
+			{
+				if (pair.second)
+				{
+					auto ids = pair.second();
+					for (const ov::String &id : ids)
+					{
+						unique_viewers.insert(id);
+					}
+					callback_executed = true;
+				}
+			}
+		}
+
+		if (callback_executed)
+		{
+			return unique_viewers.size();
+		}
+
+		uint32_t total = 0;
+		{
+			ov::SharedLockGuard lock(_output_stream_metrics_mutex);
+			for (const auto &out_metric : _output_stream_metrics)
+			{
+				if (out_metric != nullptr)
+				{
+					total += out_metric->GetUniqueViewerCount();
+				}
+			}
+		}
+		return total;
 	}
 
 }  // namespace mon

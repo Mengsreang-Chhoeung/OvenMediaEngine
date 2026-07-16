@@ -443,6 +443,10 @@ std::shared_ptr<TsHttpInterceptor> HlsPublisher::CreateInterceptor()
 					}
 					session->SetRequestedUrl(requested_url);
 					session->SetFinalUrl(final_url);
+					if (remote_address != nullptr)
+					{
+						session->SetClientIp(remote_address->GetIpAddress());
+					}
 
 					stream->AddSession(session);
 				}
@@ -489,6 +493,10 @@ std::shared_ptr<TsHttpInterceptor> HlsPublisher::CreateInterceptor()
 						}
 						session->SetRequestedUrl(requested_url);
 						session->SetFinalUrl(final_url);
+						if (remote_address != nullptr)
+						{
+							session->SetClientIp(remote_address->GetIpAddress());
+						}
 						stream->AddSession(session);
 					}
 				}

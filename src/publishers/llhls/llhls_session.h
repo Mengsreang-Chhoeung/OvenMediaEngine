@@ -10,6 +10,7 @@
 
 #include <base/publisher/session.h>
 #include <list>
+#include <atomic>
 
 #include <modules/access_control/access_controller.h>
 
@@ -59,6 +60,8 @@ public:
 	const ov::String &GetSessionKey() const;
 
 	const ov::String &GetUserAgent() const;
+
+	std::vector<ov::String> GetActiveConnectionIds() const override;
 
 private:
 
@@ -112,6 +115,7 @@ private:
 	// session life time
 	uint64_t _session_life_time = 0;
 	uint32_t _number_of_players = 0;
+	std::atomic<uint64_t> _session_last_request_time_ms = {0};
 
 	ov::String _session_key;
 

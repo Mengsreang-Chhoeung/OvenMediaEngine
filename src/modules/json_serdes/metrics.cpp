@@ -32,6 +32,13 @@ namespace serdes
 		SetTimestamp(value, "lastRecvTime", metrics->GetLastRecvTime());
 		SetTimestamp(value, "lastSentTime", metrics->GetLastSentTime());
 		SetInt(value, "totalConnections", metrics->GetTotalConnections());
+
+		auto stream_metrics = std::dynamic_pointer_cast<const mon::StreamMetrics>(metrics);
+		if (stream_metrics != nullptr)
+		{
+			SetInt(value, "uniqueViewerCount", stream_metrics->GetUniqueViewerCount());
+		}
+
 		SetInt(value, "maxTotalConnections", metrics->GetMaxTotalConnections());
 		SetTimestamp(value, "maxTotalConnectionTime", metrics->GetMaxTotalConnectionsTime());
 
