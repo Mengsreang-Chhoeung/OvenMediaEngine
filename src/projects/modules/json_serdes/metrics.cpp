@@ -8,10 +8,15 @@
 //==============================================================================
 #include "application.h"
 #include "common.h"
+
+#define OV_LOG_TAG "json_serdes"
+
 namespace serdes
 {
 	Json::Value JsonFromMetrics(const std::shared_ptr<const mon::CommonMetrics> &metrics)
 	{
+		logti("JsonFromMetrics entered");
+
 		if (metrics == nullptr)
 		{
 			return Json::nullValue;
@@ -24,7 +29,7 @@ namespace serdes
 		SetInt64(value, "totalBytesIn", metrics->GetTotalBytesIn());
 		SetInt64(value, "totalBytesOut", metrics->GetTotalBytesOut());
 		SetInt64(value, "avgThroughputIn", metrics->GetAvgThroughputIn());
-		SetInt64(value, "avgThroughputOut", metrics->GetAvgThroughputOut());		
+		SetInt64(value, "avgThroughputOut", metrics->GetAvgThroughputOut());
 		SetInt64(value, "maxThroughputIn", metrics->GetMaxThroughputIn());
 		SetInt64(value, "maxThroughputOut", metrics->GetMaxThroughputOut());
 		SetInt64(value, "lastThroughputIn", metrics->GetLastThroughputIn());
@@ -32,11 +37,16 @@ namespace serdes
 		SetTimestamp(value, "lastRecvTime", metrics->GetLastRecvTime());
 		SetTimestamp(value, "lastSentTime", metrics->GetLastSentTime());
 		SetInt(value, "totalConnections", metrics->GetTotalConnections());
-		
+
 		auto stream_metrics = std::dynamic_pointer_cast<const mon::StreamMetrics>(metrics);
 		if (stream_metrics != nullptr)
 		{
+			logti("JsonFromMetrics detected StreamMetrics!");
 			SetInt(value, "uniqueViewerCount", stream_metrics->GetUniqueViewerCount());
+		}
+		else
+		{
+			logti("JsonFromMetrics did NOT detect StreamMetrics!");
 		}
 
 		SetInt(value, "maxTotalConnections", metrics->GetMaxTotalConnections());
@@ -44,16 +54,16 @@ namespace serdes
 
 		Json::Value &connections = value["connections"];
 
-		auto target_publishers = {
-			PublisherType::Webrtc,
-			PublisherType::LLHls,
-			PublisherType::Ovt,
-			PublisherType::File,
-			PublisherType::Push,
-			PublisherType::Thumbnail,
-			PublisherType::Hls,
-			PublisherType::Srt,
-		};
+		auto target_publishers	 = {
+			  PublisherType::Webrtc,
+			  PublisherType::LLHls,
+			  PublisherType::Ovt,
+			  PublisherType::File,
+			  PublisherType::Push,
+			  PublisherType::Thumbnail,
+			  PublisherType::Hls,
+			  PublisherType::Srt,
+		  };
 
 		for (auto publisher : target_publishers)
 		{

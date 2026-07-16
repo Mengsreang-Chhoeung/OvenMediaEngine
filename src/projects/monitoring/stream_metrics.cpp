@@ -7,19 +7,6 @@
 #include "application_metrics.h"
 #include "host_metrics.h"
 #include "monitoring_private.h"
-#include <fstream>
-#include <mutex>
-
-static std::mutex debug_log_mutex;
-static void write_debug_log(const std::string &message)
-{
-	std::lock_guard<std::mutex> lock(debug_log_mutex);
-	std::ofstream ofs("/workspace/debug_viewer.log", std::ios::app);
-	if (ofs)
-	{
-		ofs << message << "\n";
-	}
-}
 
 namespace mon
 {
@@ -32,7 +19,8 @@ namespace mon
 		if (GetSourceType() == StreamSourceType::Ovt || GetSourceType() == StreamSourceType::RtspPull)
 		{
 			out_str.AppendFormat(
-				"\n\tElapsed time to connect to origin server : %" PRId64 " ms\n"
+				"\n\tElapsed time to connect to origin server : %" PRId64
+				" ms\n"
 				"\tElapsed time to subscribe to origin server : %" PRId64 " ms\n",
 				GetOriginConnectionTimeMSec(), GetOriginSubscribeTimeMSec());
 		}
@@ -255,17 +243,34 @@ namespace mon
 
 	uint32_t StreamMetrics::GetUniqueViewerCount() const
 	{
-		if (_unique_viewer_count_callback)
-		{
-			uint32_t val = _unique_viewer_count_callback();
-			write_debug_log("StreamMetrics::GetUniqueViewerCount() for stream: " + std::string(GetName().CStr()) + ", callback present, returning: " + std::to_string(val));
-			return val;
-		}
+		logti("StreamMetrics::GetUniqueViewerCount called");
 
 		uint32_t total = 0;
+		bool callback_executed = false;
+
+		{
+			std::lock_guard<std::mutex> lock(_unique_viewer_count_callbacks_mutex);
+			for (const auto &pair : _unique_viewer_count_callbacks)
+			{
+				if (pair.second)
+				{
+					uint32_t val = pair.second();
+					logti("Unique viewer callback for publisher %s returned %u", StringFromPublisherType(pair.first).CStr(), val);
+					total += val;
+					callback_executed = true;
+				}
+			}
+		}
+
+		if (callback_executed)
+		{
+			return total;
+		}
+
+		logti("Unique viewer callback is not set, falling back to output streams");
+
 		{
 			ov::SharedLockGuard lock(_output_stream_metrics_mutex);
-			write_debug_log("StreamMetrics::GetUniqueViewerCount() for stream: " + std::string(GetName().CStr()) + ", callback NOT present, output streams count: " + std::to_string(_output_stream_metrics.size()));
 			for (const auto &out_metric : _output_stream_metrics)
 			{
 				if (out_metric != nullptr)
@@ -274,7 +279,6 @@ namespace mon
 				}
 			}
 		}
-		write_debug_log("StreamMetrics::GetUniqueViewerCount() for stream: " + std::string(GetName().CStr()) + ", returning total output stream viewers: " + std::to_string(total));
 		return total;
 	}
 

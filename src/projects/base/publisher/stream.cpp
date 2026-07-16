@@ -3,23 +3,8 @@
 #include <base/event/command/commands.h>
 #include <monitoring/monitoring.h>
 
-#include <fstream>
-#include <mutex>
-#include <set>
-
 #include "application.h"
 #include "publisher_private.h"
-
-static std::mutex debug_log_mutex;
-static void write_debug_log(const std::string &message)
-{
-	std::lock_guard<std::mutex> lock(debug_log_mutex);
-	std::ofstream ofs("/workspace/debug_viewer.log", std::ios::app);
-	if (ofs)
-	{
-		ofs << message << "\n";
-	}
-}
 
 namespace pub
 {
@@ -256,22 +241,15 @@ namespace pub
 			auto metrics = StreamMetrics(*this);
 			if (metrics != nullptr)
 			{
-				write_debug_log("Successfully set callback for stream: " + std::string(GetName().CStr()) + ", Stream ID: " + std::to_string(GetId()));
-				metrics->SetUniqueViewerCountCallback([self = std::weak_ptr<const Stream>(GetSharedPtr())]() -> uint32_t {
+				metrics->SetUniqueViewerCountCallback(GetApplication()->GetPublisherType(), [self = std::weak_ptr<const Stream>(GetSharedPtr())]() -> uint32_t {
 					auto stream = self.lock();
 					if (stream)
 					{
 						uint32_t count = stream->GetUniqueViewerCount();
-						write_debug_log("Callback executed for stream: " + std::string(stream->GetName().CStr()) + ", returning unique viewer count: " + std::to_string(count));
 						return count;
 					}
-					write_debug_log("Callback executed but stream was deleted!");
 					return 0;
 				});
-			}
-			else
-			{
-				write_debug_log("Failed to find StreamMetrics for stream: " + std::string(GetName().CStr()) + ", Stream ID: " + std::to_string(GetId()));
 			}
 		}
 
@@ -533,19 +511,21 @@ namespace pub
 	{
 		std::set<uint32_t> unique_connections;
 		std::shared_lock<std::shared_mutex> session_lock(_session_map_mutex);
+		logti("Stream::GetUniqueViewerCount: total sessions in map = %zu", _sessions.size());
 		for (const auto &pair : _sessions)
 		{
 			auto session = pair.second;
 			if (session != nullptr)
 			{
 				auto connection_ids = session->GetActiveConnectionIds();
+				logti("Session ID %u has %zu active connection IDs", session->GetId(), connection_ids.size());
 				for (uint32_t cid : connection_ids)
 				{
 					unique_connections.insert(cid);
 				}
 			}
 		}
-		write_debug_log("Stream::GetUniqueViewerCount() for stream: " + std::string(GetName().CStr()) + ", sessions size: " + std::to_string(_sessions.size()) + ", unique connections size: " + std::to_string(unique_connections.size()));
+		logti("Stream::GetUniqueViewerCount: returning unique set size = %zu", unique_connections.size());
 		return unique_connections.size();
 	}
 

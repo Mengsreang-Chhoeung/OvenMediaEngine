@@ -6,51 +6,53 @@
 //  Copyright (c) 2022 AirenSoft. All rights reserved.
 //
 //==============================================================================
-#include <modules/http/server/http_exchange.h>
 #include "hls_session.h"
-#include "hls_application.h"
-#include "hls_stream.h"
-#include "hls_private.h"
 
-std::shared_ptr<HlsSession> HlsSession::Create(session_id_t session_id, 
-												const bool &origin_mode,
-												const ov::String &session_key,
-												const std::shared_ptr<pub::Application> &application,
-												const std::shared_ptr<pub::Stream> &stream,
-												uint64_t session_life_time)
+#include <modules/http/server/http_exchange.h>
+
+#include "hls_application.h"
+#include "hls_private.h"
+#include "hls_stream.h"
+
+std::shared_ptr<HlsSession> HlsSession::Create(session_id_t session_id,
+											   const bool &origin_mode,
+											   const ov::String &session_key,
+											   const std::shared_ptr<pub::Application> &application,
+											   const std::shared_ptr<pub::Stream> &stream,
+											   uint64_t session_life_time)
 {
 	return HlsSession::Create(session_id, origin_mode, session_key, application, stream, nullptr, session_life_time);
 }
 
-std::shared_ptr<HlsSession> HlsSession::Create(session_id_t session_id, 
-												const bool &origin_mode,
-												const ov::String &session_key,
-												const std::shared_ptr<pub::Application> &application,
-												const std::shared_ptr<pub::Stream> &stream,
-												const ov::String &user_agent,
-												uint64_t session_life_time)
+std::shared_ptr<HlsSession> HlsSession::Create(session_id_t session_id,
+											   const bool &origin_mode,
+											   const ov::String &session_key,
+											   const std::shared_ptr<pub::Application> &application,
+											   const std::shared_ptr<pub::Stream> &stream,
+											   const ov::String &user_agent,
+											   uint64_t session_life_time)
 {
 	auto session_info = info::Session(*std::static_pointer_cast<info::Stream>(stream), session_id);
-	auto session = std::make_shared<HlsSession>(session_info, origin_mode, session_key, application, stream, user_agent, session_life_time);
+	auto session	  = std::make_shared<HlsSession>(session_info, origin_mode, session_key, application, stream, user_agent, session_life_time);
 
 	if (session->Start() == false)
 	{
 		return nullptr;
-	} 
+	}
 
 	return session;
 }
 
-HlsSession::HlsSession(const info::Session &session_info, 
-							const bool &origin_mode,
-							const ov::String &session_key,
-							const std::shared_ptr<pub::Application> &application, 
-							const std::shared_ptr<pub::Stream> &stream,
-							const ov::String &user_agent,
-							uint64_t session_life_time)
+HlsSession::HlsSession(const info::Session &session_info,
+					   const bool &origin_mode,
+					   const ov::String &session_key,
+					   const std::shared_ptr<pub::Application> &application,
+					   const std::shared_ptr<pub::Stream> &stream,
+					   const ov::String &user_agent,
+					   uint64_t session_life_time)
 	: pub::Session(session_info, application, stream), _user_agent(user_agent)
 {
-	_origin_mode = origin_mode;
+	_origin_mode	   = origin_mode;
 	_session_life_time = session_life_time;
 	if (session_key.IsEmpty())
 	{
@@ -70,10 +72,10 @@ HlsSession::~HlsSession()
 
 bool HlsSession::Start()
 {
-	auto ts_conf = GetApplication()->GetConfig().GetPublishers().GetHlsPublisher();
-	
+	auto ts_conf		   = GetApplication()->GetConfig().GetPublishers().GetHlsPublisher();
+
 	_default_option_rewind = ts_conf.GetDefaultQueryString().GetBoolValue("_HLS_rewind", kDefaultHlsRewind);
-	
+
 	return Session::Start();
 }
 
@@ -96,8 +98,8 @@ void HlsSession::UpdateLastRequest(uint32_t connection_id)
 {
 	std::lock_guard<std::shared_mutex> lock(_last_request_time_guard);
 	_last_request_time[connection_id] = ov::Clock::NowMSec();
-	_session_last_request_time_ms = ov::Clock::NowMSec();
-
+	_session_last_request_time_ms	  = ov::Clock::NowMSec();
+	logti("HlsSession %u received request on connection %u", GetId(), connection_id);
 	logtt("TsSession(%u) : Request updated from %u : size(%zu)", GetId(), connection_id, _last_request_time.size());
 }
 
@@ -130,9 +132,11 @@ bool HlsSession::IsNoConnection() const
 
 std::vector<uint32_t> HlsSession::GetActiveConnectionIds() const
 {
-	if (ov::Clock::NowMSec() - _session_last_request_time_ms.load() < 10000)
+	uint64_t diff = ov::Clock::NowMSec() - _session_last_request_time_ms.load();
+	logti("HlsSession %u last request was %" PRIu64 " ms ago", GetId(), diff);
+	if (diff < 10000)
 	{
-		return { GetId() };
+		return {GetId()};
 	}
 	return {};
 }
@@ -146,24 +150,24 @@ void HlsSession::SendOutgoingData(const std::any &notification)
 void HlsSession::OnMessageReceived(const std::any &message)
 {
 	std::shared_ptr<http::svr::HttpExchange> exchange = nullptr;
-	try 
+	try
 	{
-        exchange = std::any_cast<std::shared_ptr<http::svr::HttpExchange>>(message);
-		if(exchange == nullptr)
+		exchange = std::any_cast<std::shared_ptr<http::svr::HttpExchange>>(message);
+		if (exchange == nullptr)
 		{
 			return;
 		}
-    }
-    catch(const std::bad_any_cast& e) 
+	}
+	catch (const std::bad_any_cast &e)
 	{
-        logtc("An incorrect type of packet was input from the stream.");
+		logtc("An incorrect type of packet was input from the stream.");
 		return;
-    }
+	}
 
 	auto response = exchange->GetResponse();
 
 	// Check expired time
-	if(_session_life_time != 0 && _session_life_time < ov::Clock::NowMSec())
+	if (_session_life_time != 0 && _session_life_time < ov::Clock::NowMSec())
 	{
 		response->SetStatusCode(http::StatusCode::Unauthorized);
 		ResponseData(exchange);
@@ -172,7 +176,7 @@ void HlsSession::OnMessageReceived(const std::any &message)
 
 	logtt("TsSession::OnMessageReceived(%u) - %s", GetId(), exchange->ToString().CStr());
 
-	auto request = exchange->GetRequest();
+	auto request	 = exchange->GetRequest();
 	auto request_uri = request->GetParsedUri();
 
 	if (request_uri == nullptr)
@@ -201,31 +205,27 @@ void HlsSession::OnMessageReceived(const std::any &message)
 	}
 
 	switch (type)
-	{	
-	case RequestType::Playlist:
 	{
-		// Response Playlist
-		ResponseMasterPlaylist(exchange, playlist);
-		break;
-	}
-	case RequestType::Chunklist:
-	{
-		// Response Chunklist
-		ResponseMediaPlaylist(exchange, variant_name);
-		break;
-	}
-	case RequestType::Segment:
-	{
-		// Response Segment
-		ResponseSegment(exchange, variant_name, number);
-		break;
-	}
-	default:
-	{
-		response->SetStatusCode(http::StatusCode::NotFound);
-		ResponseData(exchange);
-		break;
-	}
+		case RequestType::Playlist: {
+			// Response Playlist
+			ResponseMasterPlaylist(exchange, playlist);
+			break;
+		}
+		case RequestType::Chunklist: {
+			// Response Chunklist
+			ResponseMediaPlaylist(exchange, variant_name);
+			break;
+		}
+		case RequestType::Segment: {
+			// Response Segment
+			ResponseSegment(exchange, variant_name, number);
+			break;
+		}
+		default: {
+			response->SetStatusCode(http::StatusCode::NotFound);
+			ResponseData(exchange);
+			break;
+		}
 	}
 }
 
@@ -234,7 +234,7 @@ bool HlsSession::ParseFileName(const ov::String &file_name, RequestType &type, o
 	// [Legacy HLS (Version 3) URLs]
 
 	// * Master Playlist
-	// http[s]://<host>:<port>/<application_name>/<stream_name>/ts:playlist.m3u8 
+	// http[s]://<host>:<port>/<application_name>/<stream_name>/ts:playlist.m3u8
 	// http[s]://<host>:<port>/<application_name>/<stream_name>/playlist.m3u8?format=ts
 
 	// * Media Playlist
@@ -252,13 +252,13 @@ bool HlsSession::ParseFileName(const ov::String &file_name, RequestType &type, o
 		return false;
 	}
 
-	auto name = name_ext_items[0];
-	auto ext = name_ext_items[1];
+	auto name		= name_ext_items[0];
+	auto ext		= name_ext_items[1];
 
 	auto name_items = name.Split("_");
 
 	// Master Playlist
-	// ts:playlist.m3u8 
+	// ts:playlist.m3u8
 	// playlist.m3u8?format=ts
 	if (ext.LowerCaseString() == "m3u8" && name.HasPrefix("medialist") == false)
 	{
@@ -286,7 +286,7 @@ bool HlsSession::ParseFileName(const ov::String &file_name, RequestType &type, o
 
 		variant_name = name_items[1];
 
-		playlist = name;
+		playlist	 = name;
 		return true;
 	}
 	// Segment File
@@ -301,7 +301,7 @@ bool HlsSession::ParseFileName(const ov::String &file_name, RequestType &type, o
 		}
 
 		variant_name = name_items[1];
-		number = ov::Converter::ToInt32(name_items[2]);
+		number		 = ov::Converter::ToInt32(name_items[2]);
 
 		return true;
 	}
@@ -316,7 +316,7 @@ bool HlsSession::ParseFileName(const ov::String &file_name, RequestType &type, o
 
 bool HlsSession::GetRewindOptionValue(const std::shared_ptr<ov::Url> &url) const
 {
-	bool rewind_option = _default_option_rewind; // Default value by config
+	bool rewind_option = _default_option_rewind;  // Default value by config
 
 	if (url->GetQueryValue("_HLS_rewind") == "YES")
 	{
@@ -338,11 +338,11 @@ void HlsSession::ResponseMasterPlaylist(const std::shared_ptr<http::svr::HttpExc
 		return;
 	}
 
-	auto request = exchange->GetRequest();
-	auto request_url = request->GetParsedUri();
-	auto response = exchange->GetResponse();
+	auto request				   = exchange->GetRequest();
+	auto request_url			   = request->GetParsedUri();
+	auto response				   = exchange->GetResponse();
 
-	bool rewind_option = GetRewindOptionValue(request_url);
+	bool rewind_option			   = GetRewindOptionValue(request_url);
 
 	auto [result, master_playlist] = stream->GetMasterPlaylistData(playlist, rewind_option);
 	if (result == HlsStream::RequestResult::Success)
@@ -371,10 +371,10 @@ void HlsSession::ResponseMediaPlaylist(const std::shared_ptr<http::svr::HttpExch
 		return;
 	}
 
-	auto request = exchange->GetRequest();
-	auto request_url = request->GetParsedUri();
-	auto response = exchange->GetResponse();
-	bool rewind_option = GetRewindOptionValue(request_url);
+	auto request				  = exchange->GetRequest();
+	auto request_url			  = request->GetParsedUri();
+	auto response				  = exchange->GetResponse();
+	bool rewind_option			  = GetRewindOptionValue(request_url);
 	auto [result, media_playlist] = stream->GetMediaPlaylistData(variant_name, rewind_option);
 	if (result == HlsStream::RequestResult::Success)
 	{
@@ -402,7 +402,7 @@ void HlsSession::ResponseSegment(const std::shared_ptr<http::svr::HttpExchange> 
 		return;
 	}
 
-	auto file_name = exchange->GetRequest()->GetParsedUri()->File();
+	auto file_name	= exchange->GetRequest()->GetParsedUri()->File();
 	auto file_items = file_name.Split(".");
 	if (file_items.size() < 2)
 	{
@@ -431,7 +431,7 @@ void HlsSession::ResponseSegment(const std::shared_ptr<http::svr::HttpExchange> 
 		return;
 	}
 
-	auto response = exchange->GetResponse();
+	auto response		   = exchange->GetResponse();
 
 	auto [result, segment] = stream->GetSegmentData(variant_name, number);
 	if (result == HlsStream::RequestResult::Success)
@@ -454,7 +454,7 @@ void HlsSession::ResponseSegment(const std::shared_ptr<http::svr::HttpExchange> 
 
 void HlsSession::ResponseData(const std::shared_ptr<http::svr::HttpExchange> &exchange)
 {
-	auto response = exchange->GetResponse();
+	auto response  = exchange->GetResponse();
 	auto sent_size = response->Response();
 
 	if (sent_size > 0)
