@@ -118,6 +118,7 @@ void HlsSession::OnConnectionDisconnected(uint32_t connection_id)
 	// lock
 	std::lock_guard<std::shared_mutex> lock(_last_request_time_guard);
 	_last_request_time.erase(connection_id);
+	RemoveViewerIdForConnection(connection_id);
 
 	logtt("TsSession(%u) : Disconnected from %u : size(%zu)", GetId(), connection_id, _last_request_time.size());
 }
@@ -130,12 +131,23 @@ bool HlsSession::IsNoConnection() const
 
 std::vector<ov::String> HlsSession::GetActiveConnectionIds() const
 {
-	uint64_t diff = ov::Clock::NowMSec() - _session_last_request_time_ms.load();
-	if (diff < 10000)
+	std::vector<ov::String> active_viewers;
+	std::shared_lock<std::shared_mutex> lock(_last_request_time_guard);
+	uint64_t now = ov::Clock::NowMSec();
+	
+	std::lock_guard<std::mutex> v_lock(_viewer_ids_mutex);
+	for (const auto &pair : _last_request_time)
 	{
-		return {GetClientIp()};
+		if (now - pair.second < 10000)
+		{
+			auto it = _connection_viewer_ids.find(pair.first);
+			if (it != _connection_viewer_ids.end())
+			{
+				active_viewers.push_back(it->second);
+			}
+		}
 	}
-	return {};
+	return active_viewers;
 }
 
 // pub::Session Interface

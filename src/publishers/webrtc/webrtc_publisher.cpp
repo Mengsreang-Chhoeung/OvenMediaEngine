@@ -489,7 +489,7 @@ bool WebRtcPublisher::OnAddRemoteDescription(const std::shared_ptr<http::svr::ws
 		session->SetFinalUrl(final_url);
 		if (remote_address != nullptr)
 		{
-			session->SetClientIp(remote_address->GetIpAddress());
+			session->SetViewerId(remote_address->GetIpAddress() + "|" + request->GetHeader("USER-AGENT"));
 		}
 		if (stream->AddSession(session) == false)
 		{

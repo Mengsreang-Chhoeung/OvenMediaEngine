@@ -267,18 +267,7 @@ namespace mon
 			return unique_viewers.size();
 		}
 
-		uint32_t total = 0;
-		{
-			ov::SharedLockGuard lock(_output_stream_metrics_mutex);
-			for (const auto &out_metric : _output_stream_metrics)
-			{
-				if (out_metric != nullptr)
-				{
-					total += out_metric->GetUniqueViewerCount();
-				}
-			}
-		}
-		return total;
+		return 0;
 	}
 
 }  // namespace mon

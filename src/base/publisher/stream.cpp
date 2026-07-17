@@ -520,7 +520,7 @@ namespace pub
 				auto connection_ids = session->GetActiveConnectionIds();
 				if (!connection_ids.empty())
 				{
-					active_ids.push_back(session->GetClientIp());
+					active_ids.push_back(session->GetViewerId());
 				}
 			}
 		}

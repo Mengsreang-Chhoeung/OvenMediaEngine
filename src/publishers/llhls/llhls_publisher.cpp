@@ -203,6 +203,20 @@ bool LLHlsPublisher::OnDeletePublisherApplication(const std::shared_ptr<pub::App
 	return true;
 }
 
+static std::string generate_random_string(size_t length) {
+    const std::string characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    std::random_device random_device;
+    std::mt19937 generator(random_device());
+    std::uniform_int_distribution<> distribution(0, characters.size() - 1);
+
+    std::string random_string;
+    for (size_t i = 0; i < length; ++i) {
+        random_string += characters[distribution(generator)];
+    }
+
+    return random_string;
+}
+
 std::shared_ptr<LLHlsHttpInterceptor> LLHlsPublisher::CreateInterceptor()
 {
 	auto http_interceptor = std::make_shared<LLHlsHttpInterceptor>();
@@ -437,10 +451,9 @@ std::shared_ptr<LLHlsHttpInterceptor> LLHlsPublisher::CreateInterceptor()
 					}
 					session->SetRequestedUrl(requested_url);
 					session->SetFinalUrl(final_url);
-					if (remote_address != nullptr)
-					{
-						session->SetClientIp(remote_address->GetIpAddress());
-					}
+					std::string viewer_id = generate_random_string(10);
+					logti("1 ts session (%u) : New connection added with viewer_id: %s", session->GetId(), viewer_id.c_str());
+					session->SetViewerId(viewer_id.c_str());
 
 					stream->AddSession(session);
 				}
@@ -486,10 +499,9 @@ std::shared_ptr<LLHlsHttpInterceptor> LLHlsPublisher::CreateInterceptor()
 						}
 						session->SetRequestedUrl(requested_url);
 						session->SetFinalUrl(final_url);
-						if (remote_address != nullptr)
-						{
-							session->SetClientIp(remote_address->GetIpAddress());
-						}
+						std::string viewer_id = generate_random_string(10);
+						logti("2 ts session (%u) : New connection added with viewer_id: %s", session->GetId(), viewer_id.c_str());
+						session->SetViewerId(viewer_id.c_str());
 
 						stream->AddSession(session);
 					}
@@ -507,6 +519,12 @@ std::shared_ptr<LLHlsHttpInterceptor> LLHlsPublisher::CreateInterceptor()
 
 			// It will be used in CloseHandler
 			connection->AddUserData(stream->GetStreamId(), session->GetSessionPath());
+			// if (session->HasConnection(connection->GetId()) == false)
+			// {
+			// 	std::string viewer_id = generate_random_string(10);
+			// 	logti("3 ts session (%u) : New connection added with viewer_id: %s", session->GetId(), viewer_id.c_str());
+			// 	session->AddViewerId(connection->GetId(), viewer_id.c_str());
+			// }
 			session->UpdateLastRequest(connection->GetId());
 		}
 

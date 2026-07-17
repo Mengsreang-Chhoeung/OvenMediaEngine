@@ -10,6 +10,11 @@
 #include "base/info/session.h"
 
 #include <vector>
+#include <set>
+#include <map>
+#include <mutex>
+
+#define OV_LOG_TAG "Session"
 
 namespace pub
 {
@@ -42,8 +47,48 @@ namespace pub
 
 		virtual std::vector<ov::String> GetActiveConnectionIds() const { return {}; }
 
-		ov::String GetClientIp() const { return _client_ip; }
-		void SetClientIp(const ov::String &client_ip) { _client_ip = client_ip; }
+		ov::String GetViewerId() const { return GetViewerIds().empty() ? "" : *GetViewerIds().begin(); }
+		void SetViewerId(const ov::String &viewer_id) { AddViewerId(0, viewer_id); }
+
+		std::set<ov::String> GetViewerIds() const
+		{
+			std::lock_guard<std::mutex> lock(_viewer_ids_mutex);
+			return _viewer_ids;
+		}
+
+		void AddViewerId(uint32_t connection_id, const ov::String &viewer_id)
+		{
+			std::lock_guard<std::mutex> lock(_viewer_ids_mutex);
+			logti("viewer id %s", viewer_id.CStr());
+			_viewer_ids.insert(viewer_id);
+			_connection_viewer_ids[connection_id] = viewer_id;
+		}
+
+		bool HasConnection(uint32_t connection_id) const
+		{
+			std::lock_guard<std::mutex> lock(_viewer_ids_mutex);
+			// logti("this instance: %p", this);			
+			// logti("connection id %d", connection_id);
+			bool dd = _connection_viewer_ids.find(connection_id) != _connection_viewer_ids.end();
+			// logti("connection size %zu", _connection_viewer_ids.size());
+			// for (const auto& pair : _connection_viewer_ids)
+			// {
+			// 	logti(" - Connection: %u -> Viewer ID: %s", pair.first, pair.second.CStr());
+			// }
+			// logti("has connection %d", dd);
+			return dd;
+		}
+
+		void RemoveViewerIdForConnection(uint32_t connection_id)
+		{
+			std::lock_guard<std::mutex> lock(_viewer_ids_mutex);
+			auto it = _connection_viewer_ids.find(connection_id);
+			if (it != _connection_viewer_ids.end())
+			{
+				_viewer_ids.erase(it->second);
+				_connection_viewer_ids.erase(it);
+			}
+		}
 
 		enum class SessionState : int8_t
 		{
@@ -62,12 +107,15 @@ namespace pub
 		std::shared_ptr<ov::Url> _requested_url;
 		std::shared_ptr<ov::Url> _final_url;
 
+		std::set<ov::String> _viewer_ids;
+		std::map<uint32_t, ov::String> _connection_viewer_ids;
+		mutable std::mutex _viewer_ids_mutex;
+
 	private:
 		std::shared_ptr<Application> _application;
 		std::shared_ptr<Stream> _stream;
 		SessionState _state;
 		ov::String _error_reason;
-		ov::String _client_ip;
 	};
 
 }  // namespace pub
