@@ -120,6 +120,7 @@ namespace pub
 		std::shared_ptr<Session> GetSession(session_id_t id);
 		const std::map<session_id_t, std::shared_ptr<Session>> GetAllSessions();
 		uint32_t GetSessionCount();
+		std::vector<ov::String> GetActiveSessionIds() const;
 
 		// This function is only called by Push Publisher
 		virtual	std::shared_ptr<pub::Session> CreatePushSession(std::shared_ptr<info::Push> &push);
@@ -192,7 +193,7 @@ namespace pub
 	private:
 		std::shared_ptr<StreamWorker> GetWorkerBySessionID(session_id_t session_id);
 		std::map<session_id_t, std::shared_ptr<Session>> _sessions;
-		std::shared_mutex _session_map_mutex;
+		mutable std::shared_mutex _session_map_mutex;
 
 		uint32_t _worker_count;
 		

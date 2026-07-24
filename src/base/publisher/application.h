@@ -81,6 +81,7 @@ namespace pub
 	public:
 		const char* GetApplicationTypeName() final;
 		const char* GetPublisherTypeName() final;
+		PublisherType GetPublisherType() const;
 		
 		// MediaRouterApplicationObserver Implementation
 		bool OnStreamCreated(const std::shared_ptr<info::Stream> &info) override;

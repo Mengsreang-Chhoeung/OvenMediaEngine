@@ -6,6 +6,7 @@
 //  Copyright (c) 2020 AirenSoft. All rights reserved.
 //
 //==============================================================================
+#include <memory>
 #include "application.h"
 #include "common.h"
 namespace serdes
@@ -33,6 +34,13 @@ namespace serdes
 		SetTimestamp(value, "lastSentTime", metrics->GetLastSentTime());
 		SetInt(value, "totalConnections", metrics->GetTotalConnections());
 		SetInt(value, "maxTotalConnections", metrics->GetMaxTotalConnections());
+
+		auto stream_metrics = std::dynamic_pointer_cast<const mon::StreamMetrics>(metrics);
+		if (stream_metrics != nullptr)
+		{
+			SetInt(value, "uniqueViewerCount", stream_metrics->GetUniqueViewerCount());
+		}
+
 		SetTimestamp(value, "maxTotalConnectionTime", metrics->GetMaxTotalConnectionsTime());
 
 		Json::Value &connections = value["connections"];

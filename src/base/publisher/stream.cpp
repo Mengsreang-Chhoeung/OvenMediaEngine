@@ -334,6 +334,22 @@ namespace pub
 
 		bool ok = Start();
 
+		if (ok)
+		{
+			auto metrics = StreamMetrics(*this);
+			if (metrics != nullptr)
+			{
+				metrics->SetUniqueViewerCountCallback(GetApplication()->GetPublisherType(), [self = std::weak_ptr<const Stream>(GetSharedPtr())]() -> std::vector<ov::String> {
+					auto stream = self.lock();
+					if (stream)
+					{
+						return stream->GetActiveSessionIds();
+					}
+					return {};
+				});
+			}
+		}
+
 		Unlock();
 		
 		return ok;
@@ -569,6 +585,25 @@ namespace pub
 	{
 		std::shared_lock<std::shared_mutex> session_lock(_session_map_mutex);
 		return _sessions.size();
+	}
+
+	std::vector<ov::String> Stream::GetActiveSessionIds() const
+	{
+		std::vector<ov::String> active_ids;
+		std::shared_lock<std::shared_mutex> session_lock(_session_map_mutex);
+		for (const auto &pair : _sessions)
+		{
+			auto session = pair.second;
+			if (session != nullptr)
+			{
+				auto connection_ids = session->GetActiveConnectionIds();
+				if (!connection_ids.empty())
+				{
+					active_ids.push_back(session->GetViewerId());
+				}
+			}
+		}
+		return active_ids;
 	}
 
 	bool Stream::BroadcastPacket(const std::any &packet)

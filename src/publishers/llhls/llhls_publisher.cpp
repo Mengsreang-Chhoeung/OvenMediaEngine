@@ -203,6 +203,20 @@ bool LLHlsPublisher::OnDeletePublisherApplication(const std::shared_ptr<pub::App
 	return true;
 }
 
+static std::string generate_random_string(size_t length) {
+    const std::string characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    std::random_device random_device;
+    std::mt19937 generator(random_device());
+    std::uniform_int_distribution<> distribution(0, characters.size() - 1);
+
+    std::string random_string;
+    for (size_t i = 0; i < length; ++i) {
+        random_string += characters[distribution(generator)];
+    }
+
+    return random_string;
+}
+
 std::shared_ptr<LLHlsHttpInterceptor> LLHlsPublisher::CreateInterceptor()
 {
 	auto http_interceptor = std::make_shared<LLHlsHttpInterceptor>();
@@ -424,8 +438,10 @@ std::shared_ptr<LLHlsHttpInterceptor> LLHlsPublisher::CreateInterceptor()
 				{
 					session = std::static_pointer_cast<LLHlsSession>(stream->GetSession(session_id));
 				}
+				bool haha = (session == nullptr || session->GetStream() != stream);
+				logti("Haha, %d", haha);
 
-				if (session == nullptr || session->GetStream() != stream)
+				if (haha)
 				{
 					// New HTTP Connection
 					session = LLHlsSession::Create(session_id, origin_mode, "", stream->GetApplication(), stream, request->GetHeader("USER-AGENT"), session_life_time);
@@ -437,6 +453,10 @@ std::shared_ptr<LLHlsHttpInterceptor> LLHlsPublisher::CreateInterceptor()
 					}
 					session->SetRequestedUrl(requested_url);
 					session->SetFinalUrl(final_url);
+
+					// Generate random viewer id and save to session
+					std::string viewer_id = generate_random_string(8);
+					session->AddViewerId(connection->GetId(), viewer_id.c_str());
 
 					stream->AddSession(session);
 				}
@@ -480,6 +500,7 @@ std::shared_ptr<LLHlsHttpInterceptor> LLHlsPublisher::CreateInterceptor()
 							response->SetStatusCode(http::StatusCode::InternalServerError);
 							return http::svr::NextHandler::DoNotCall;
 						}
+						logti("No no");
 						session->SetRequestedUrl(requested_url);
 						session->SetFinalUrl(final_url);
 
